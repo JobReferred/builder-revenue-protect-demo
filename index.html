@@ -11,6 +11,31 @@
   // ====== Shared state (same key as other pages) ======
   const STORAGE_KEY = "pp_demo_state";
 
+
+  // ====== Policy (demo rules stored in browser) ======
+  const POLICY_KEY = "pp_demo_policy";
+
+  const DEFAULT_POLICY = {
+    minVariationMarginPct: 15,
+    projectDriftTolerancePct: 1.0,
+    portfolioDriftTolerancePct: 1.0,
+    exposureThreshold: 20000
+  };
+
+  function loadPolicy() {
+    try {
+      const raw = localStorage.getItem(POLICY_KEY);
+      if (!raw) return structuredClone(DEFAULT_POLICY);
+      const p = JSON.parse(raw);
+      return {
+        ...structuredClone(DEFAULT_POLICY),
+        ...p
+      };
+    } catch {
+      return structuredClone(DEFAULT_POLICY);
+    }
+  }
+
   function loadState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -126,13 +151,14 @@
     </div>
     <div class="flex gap-2">
       <a href="project.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Project Dashboard</a>
+      <a href="policy.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Policy</a>
       <button onclick="resetPortfolio()" class="px-3 py-2 rounded-lg bg-white border text-sm">Reset Portfolio</button>
     </div>
   </div>
 </header>
 
 <main class="mx-auto max-w-6xl px-4 py-6">
-  <script>
+  <script>}
     // Keep Lot 24 aligned to your single-project demo (if present)
     syncLot24ToSingleProject();
 
@@ -151,11 +177,18 @@
     const currentPortfolioPct = totalContract > 0 ? (totalCurrentProfit / totalContract) * 100 : 0;
 
     const portfolioBelowTarget = totalCurrentProfit - weightedTargetProfit; // negative = below target
+    const policy = loadPolicy();
+const PORTFOLIO_DRIFT_TOLERANCE = Number(policy.portfolioDriftTolerancePct || 1.0);
+    const portfolioDriftPct = currentPortfolioPct - targetPortfolioPct;
     const exposureTotal = rows.reduce((a,x)=>a + x.m.exposure, 0);
     const unapprovedTotal = portfolio.projects.reduce((a,p)=>a+Number(p.unapprovedVarCharge||0),0);
 
     const belowClass = portfolioBelowTarget < 0 ? "text-red-600" : "text-emerald-700";
   </script>
+
+<div id="portfolioAlert" class="hidden mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+  ⚠ Portfolio drift exceeds tolerance.
+</div>
 
   <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
     <div class="rounded-2xl bg-white border p-4">
@@ -220,6 +253,7 @@
     </div>
   </div>
 
+  
   <script>
     document.getElementById("kpiActive").textContent = String(activeProjects);
     document.getElementById("kpiContract").textContent = money(totalContract);
@@ -229,6 +263,13 @@
     document.getElementById("headline").textContent =
       `Portfolio is ${money(portfolioBelowTarget)} vs target margin`;
     document.getElementById("headline").className = `text-3xl font-semibold mt-1 ${belowClass}`;
+
+if (portfolioDriftPct < -PORTFOLIO_DRIFT_TOLERANCE) {
+  const pAlert = document.getElementById("portfolioAlert");
+  pAlert.classList.remove("hidden");
+  pAlert.innerHTML =
+    `🔴 Portfolio drift exceeds tolerance (${portfolioDriftPct.toFixed(1)}% below target).`;
+}
 
     document.getElementById("exposure").textContent = money(exposureTotal);
     document.getElementById("unapproved").textContent = money(unapprovedTotal);

@@ -20,12 +20,32 @@
       ]
     };
 
+
+    // ===== Policy (demo guardrails) =====
+    const POLICY_KEY = "pp_demo_policy";
+    const DEFAULT_POLICY = {
+      minVariationMarginPct: 15,
+      projectDriftTolerancePct: 1.0,
+      portfolioDriftTolerancePct: 1.0,
+      exposureThreshold: 20000
+    };
+    function loadPolicy() {
+      try {
+        const raw = localStorage.getItem(POLICY_KEY);
+        if (!raw) return structuredClone(DEFAULT_POLICY);
+        const p = JSON.parse(raw);
+        return { ...structuredClone(DEFAULT_POLICY), ...p };
+      } catch {
+        return structuredClone(DEFAULT_POLICY);
+      }
+    }
+
+
     function loadState() {
       try {
         const raw = localStorage.getItem("pp_demo_state");
         if (!raw) return structuredClone(DEFAULT_STATE);
         const parsed = JSON.parse(raw);
-        // Shallow validation
         if (!parsed || typeof parsed !== "object") return structuredClone(DEFAULT_STATE);
         if (!Array.isArray(parsed.variations)) parsed.variations = [];
         return parsed;
@@ -62,7 +82,6 @@
         }
       }
 
-      // Conservative: include approved variations only in "current margin"
       const currentProfit = baseProfit + (approvedCharge - approvedCost);
       const targetProfit = state.contractValue * (state.targetMarginPct / 100);
 
@@ -102,6 +121,7 @@
         <a href="variation.html" class="px-3 py-2 rounded-lg bg-slate-900 text-white text-sm">+ Add Variation</a>
         <a href="approvals.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Approvals</a>
         <a href="summary.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Summary</a>
+        <a href="policy.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Policy</a>
         <button onclick="resetDemo()" class="px-3 py-2 rounded-lg bg-white border text-sm">Reset</button>
       </div>
     </div>
@@ -111,7 +131,10 @@
     <script>
       const state = loadState();
       const m = calc(state);
-      const marginLostClass = m.marginLostDollars < 0 ? "text-red-600" : "text-emerald-700";
+
+      const policy = loadPolicy();
+      const DRIFT_TOLERANCE_PCT = Number(policy.projectDriftTolerancePct || 1.0);
+      const driftPct = m.currentMarginPct - m.targetMarginPct;
     </script>
 
     <div class="mb-4">
@@ -136,6 +159,10 @@
         <div class="text-2xl font-semibold" id="currentMargin"></div>
         <div class="text-sm text-slate-600 mt-1">Current profit: <span class="font-medium" id="currentProfit"></span></div>
       </div>
+    </div>
+
+    <div id="driftAlert" class="hidden mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700">
+      ⚠ Margin drift exceeds company tolerance.
     </div>
 
     <div class="mt-4 rounded-2xl bg-white border p-5">
@@ -215,6 +242,12 @@
 
       const headline = `Margin dropped from ${m.targetMarginPct.toFixed(1)}% to ${m.currentMarginPct.toFixed(1)}%`;
       document.getElementById("headline").textContent = headline;
+
+      if (driftPct < -DRIFT_TOLERANCE_PCT) {
+        const alertBox = document.getElementById("driftAlert");
+        alertBox.classList.remove("hidden");
+        alertBox.innerHTML = `⚠ Margin drift exceeds tolerance (${driftPct.toFixed(1)}% vs allowed ${DRIFT_TOLERANCE_PCT}%).`;
+      }
 
       document.getElementById("marginLost").textContent = money(m.marginLostDollars);
       document.getElementById("marginLost").className = `text-3xl font-semibold mt-1 ${m.marginLostDollars < 0 ? "text-red-600" : "text-emerald-700"}`;

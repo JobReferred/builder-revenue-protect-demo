@@ -20,6 +20,28 @@
       const x = Number(n || 0);
       return x.toLocaleString("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
     }
+
+
+    // ===== Policy (demo guardrails) =====
+    const POLICY_KEY = "pp_demo_policy";
+    const DEFAULT_POLICY = {
+      minVariationMarginPct: 15,
+      projectDriftTolerancePct: 1.0,
+      portfolioDriftTolerancePct: 1.0,
+      exposureThreshold: 20000
+    };
+    function loadPolicy() {
+      try {
+        const raw = localStorage.getItem(POLICY_KEY);
+        if (!raw) return structuredClone(DEFAULT_POLICY);
+        const p = JSON.parse(raw);
+        return { ...structuredClone(DEFAULT_POLICY), ...p };
+      } catch {
+        return structuredClone(DEFAULT_POLICY);
+      }
+    }
+
+
     function ensureState() {
       let s = loadState();
       if (!s) {
@@ -40,7 +62,6 @@
     const state = ensureState();
 
     function nextId() {
-      // V-001 style
       const nums = state.variations
         .map(v => String(v.id || "").match(/(\d+)/))
         .filter(Boolean)
@@ -56,6 +77,15 @@
       const desc = document.getElementById("desc").value.trim() || "Variation item";
       const cost = Number(document.getElementById("cost").value || 0);
       const charge = Number(document.getElementById("charge").value || 0);
+
+      const policy = loadPolicy();
+      const minVariationMarginPct = Number(policy.minVariationMarginPct || 15);
+      const variationMarginPct = charge > 0 ? ((charge - cost) / charge) * 100 : 0;
+
+      if (variationMarginPct < minVariationMarginPct) {
+        alert(`⚠ Variation margin is ${variationMarginPct.toFixed(1)}% (below ${minVariationMarginPct}% policy).`);
+      }
+
       const sent = document.getElementById("sent").checked;
       const approved = document.getElementById("approved").checked;
       const paid = document.getElementById("paid").checked;
@@ -63,8 +93,8 @@
       state.variations.push({ id, desc, cost, charge, sent, approved, paid });
       saveState(state);
 
-      // Go to dashboard for the “moment”
-      window.location.href = "index.html";
+      // Go to project dashboard for the “moment”
+      window.location.href = "project.html";
     }
   </script>
 
@@ -75,9 +105,11 @@
         <div class="text-sm text-slate-600">Add a variation (demo)</div>
       </div>
       <div class="flex gap-2">
-        <a href="project.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Dashboard</a>
+        <a href="index.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Portfolio</a>
+        <a href="project.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Project</a>
         <a href="approvals.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Approvals</a>
         <a href="summary.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Summary</a>
+        <a href="policy.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Policy</a>
       </div>
     </div>
   </header>
@@ -137,7 +169,6 @@
   </main>
 
   <script>
-    // Pre-fill an ID suggestion
     document.getElementById("vid").placeholder = nextId();
   </script>
 </body>
