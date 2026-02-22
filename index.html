@@ -3,239 +3,268 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Profit Protection Demo — Dashboard</title>
+  <title>Profit Protection Demo — Portfolio</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-50 text-slate-900">
+<script>
+  // ====== Shared state (same key as other pages) ======
+  const STORAGE_KEY = "pp_demo_state";
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      if (!s || typeof s !== "object") return null;
+      if (!Array.isArray(s.variations)) s.variations = [];
+      return s;
+    } catch { return null; }
+  }
+  function saveState(state) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+  function money(n) {
+    const x = Number(n || 0);
+    return x.toLocaleString("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
+  }
+
+  // ====== Portfolio seed (demo-only) ======
+  // This is separate from your "single project" state used in index.html.
+  // It creates multiple projects for the owner view and allows drill-down into the existing project dashboard.
+  const PORTFOLIO_KEY = "pp_demo_portfolio";
+
+  const DEFAULT_PORTFOLIO = {
+    ownerName: "Director View",
+    projects: [
+      { id:"P-024", name:"Lot 24 – Bardia", contract:780000, estCost:639600, targetPct:18, approvedVarCharge: 7700, approvedVarCost: 5300, unapprovedVarCharge: 4500, unapprovedVarCost: 3200 },
+      { id:"P-031", name:"Lot 31 – Oran Park", contract:920000, estCost:780000, targetPct:19, approvedVarCharge: 12000, approvedVarCost: 15500, unapprovedVarCharge: 8000, unapprovedVarCost: 6000 },
+      { id:"P-019", name:"Lot 19 – Edmondson Park", contract:650000, estCost:552500, targetPct:17, approvedVarCharge: 6000, approvedVarCost: 4200, unapprovedVarCharge: 18000, unapprovedVarCost: 14000 },
+      { id:"P-044", name:"Lot 44 – Austral", contract:840000, estCost:705600, targetPct:18, approvedVarCharge: 9500, approvedVarCost: 7100, unapprovedVarCharge: 0, unapprovedVarCost: 0 }
+    ]
+  };
+
+  function loadPortfolio() {
+    try {
+      const raw = localStorage.getItem(PORTFOLIO_KEY);
+      if (!raw) return structuredClone(DEFAULT_PORTFOLIO);
+      const p = JSON.parse(raw);
+      if (!p || typeof p !== "object" || !Array.isArray(p.projects)) return structuredClone(DEFAULT_PORTFOLIO);
+      return p;
+    } catch { return structuredClone(DEFAULT_PORTFOLIO); }
+  }
+  function savePortfolio(p) {
+    localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(p));
+  }
+
+  function calcProject(prj) {
+    const baseProfit = prj.contract - prj.estCost;
+    const approvedProfit = (Number(prj.approvedVarCharge||0) - Number(prj.approvedVarCost||0));
+    const currentProfit = baseProfit + approvedProfit;
+
+    const targetProfit = prj.contract * (prj.targetPct / 100);
+    const currentPct = prj.contract > 0 ? (currentProfit / prj.contract) * 100 : 0;
+    const driftPct = currentPct - prj.targetPct;
+    const driftDollars = currentProfit - targetProfit;
+
+    const exposure = Math.max(0, Number(prj.unapprovedVarCost||0) - Number(prj.unapprovedVarCharge||0))
+      + Math.max(0, (Number(prj.unapprovedVarCost||0) * 0.10)); // extra heuristic “risk buffer” for demo
+
+    // Risk scoring for quick red/amber/green
+    let risk = "GREEN";
+    if (driftPct <= -2 || driftDollars <= -25000) risk = "RED";
+    else if (driftPct <= -1 || driftDollars <= -10000) risk = "AMBER";
+
+    return { baseProfit, approvedProfit, currentProfit, targetProfit, currentPct, driftPct, driftDollars, exposure, risk };
+  }
+
+  function riskBadge(risk) {
+    if (risk === "RED") return `<span class="inline-flex items-center rounded-full bg-red-50 px-2 py-1 text-xs font-medium text-red-700 border border-red-200">High</span>`;
+    if (risk === "AMBER") return `<span class="inline-flex items-center rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 border border-amber-200">Med</span>`;
+    return `<span class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 border border-emerald-200">Low</span>`;
+  }
+
+  function resetPortfolio() {
+    savePortfolio(structuredClone(DEFAULT_PORTFOLIO));
+    location.reload();
+  }
+
+  function syncLot24ToSingleProject() {
+    // Optional: Make Lot 24 in portfolio match your existing single-project demo state (index.html).
+    // We only sync the row numbers for realism; the multi-project list stays separate otherwise.
+    const single = loadState();
+    if (!single) return;
+
+    // derive sums from your single-project variations list (approved/unapproved)
+    let approvedCharge = 0, approvedCost = 0, unapprovedCharge = 0, unapprovedCost = 0;
+    for (const v of single.variations || []) {
+      const c = Number(v.cost||0), ch = Number(v.charge||0);
+      if (v.approved) { approvedCharge += ch; approvedCost += c; }
+      else { unapprovedCharge += ch; unapprovedCost += c; }
+    }
+
+    const portfolio = loadPortfolio();
+    const idx = portfolio.projects.findIndex(x => x.name === "Lot 24 – Bardia");
+    if (idx >= 0) {
+      portfolio.projects[idx].contract = Number(single.contractValue||portfolio.projects[idx].contract);
+      portfolio.projects[idx].estCost = Number(single.estimatedCost||portfolio.projects[idx].estCost);
+      portfolio.projects[idx].targetPct = Number(single.targetMarginPct||portfolio.projects[idx].targetPct);
+      portfolio.projects[idx].approvedVarCharge = approvedCharge;
+      portfolio.projects[idx].approvedVarCost = approvedCost;
+      portfolio.projects[idx].unapprovedVarCharge = unapprovedCharge;
+      portfolio.projects[idx].unapprovedVarCost = unapprovedCost;
+      savePortfolio(portfolio);
+    }
+  }
+</script>
+
+<header class="border-b bg-white">
+  <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+    <div>
+      <div class="text-xl font-semibold">Profit Protection System</div>
+      <div class="text-sm text-slate-600">Portfolio (owner view)</div>
+    </div>
+    <div class="flex gap-2">
+      <a href="index.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Project Dashboard</a>
+      <a href="variation.html" class="px-3 py-2 rounded-lg bg-white border text-sm">+ Add Variation</a>
+      <a href="approvals.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Approvals</a>
+      <a href="summary.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Summary</a>
+      <button onclick="resetPortfolio()" class="px-3 py-2 rounded-lg bg-white border text-sm">Reset Portfolio</button>
+    </div>
+  </div>
+</header>
+
+<main class="mx-auto max-w-6xl px-4 py-6">
   <script>
-    const DEFAULT_STATE = {
-      projectName: "Lot 24 – Bardia",
-      contractValue: 780000,
-      estimatedCost: 639600,
-      targetMarginPct: 18,
-      variations: [
-        // seed data (you can delete)
-        { id: "V-012", desc: "Extra cabinetry to pantry", cost: 3200, charge: 4500, sent: true, approved: false, paid: false },
-        { id: "V-013", desc: "Upgrade tiles to 600x600", cost: 2100, charge: 3200, sent: true, approved: true,  paid: false }
-      ]
-    };
+    // Keep Lot 24 aligned to your single-project demo (if present)
+    syncLot24ToSingleProject();
 
-    function loadState() {
-      try {
-        const raw = localStorage.getItem("pp_demo_state");
-        if (!raw) return structuredClone(DEFAULT_STATE);
-        const parsed = JSON.parse(raw);
-        // Shallow validation
-        if (!parsed || typeof parsed !== "object") return structuredClone(DEFAULT_STATE);
-        if (!Array.isArray(parsed.variations)) parsed.variations = [];
-        return parsed;
-      } catch {
-        return structuredClone(DEFAULT_STATE);
-      }
-    }
+    const portfolio = loadPortfolio();
+    const rows = portfolio.projects.map(p => ({ p, m: calcProject(p) }));
 
-    function saveState(state) {
-      localStorage.setItem("pp_demo_state", JSON.stringify(state));
-    }
+    const activeProjects = portfolio.projects.length;
+    const totalContract = portfolio.projects.reduce((a,p)=>a+Number(p.contract||0),0);
+    const weightedTargetProfit = portfolio.projects.reduce((a,p)=>a + (Number(p.contract||0) * (Number(p.targetPct||0)/100)), 0);
+    const totalCurrentProfit = portfolio.projects.reduce((a,p)=>{
+      const m = calcProject(p);
+      return a + m.currentProfit;
+    },0);
 
-    function money(n) {
-      const x = Number(n || 0);
-      return x.toLocaleString("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
-    }
+    const targetPortfolioPct = totalContract > 0 ? (weightedTargetProfit / totalContract) * 100 : 0;
+    const currentPortfolioPct = totalContract > 0 ? (totalCurrentProfit / totalContract) * 100 : 0;
 
-    function calc(state) {
-      const baseProfit = state.contractValue - state.estimatedCost;
+    const portfolioBelowTarget = totalCurrentProfit - weightedTargetProfit; // negative = below target
+    const exposureTotal = rows.reduce((a,x)=>a + x.m.exposure, 0);
+    const unapprovedTotal = portfolio.projects.reduce((a,p)=>a+Number(p.unapprovedVarCharge||0),0);
 
-      let approvedCharge = 0;
-      let approvedCost = 0;
-      let unapprovedCharge = 0;
-      let unapprovedCost = 0;
-
-      for (const v of state.variations) {
-        const isApproved = !!v.approved;
-        if (isApproved) {
-          approvedCharge += Number(v.charge || 0);
-          approvedCost += Number(v.cost || 0);
-        } else {
-          unapprovedCharge += Number(v.charge || 0);
-          unapprovedCost += Number(v.cost || 0);
-        }
-      }
-
-      // Conservative: include approved variations only in "current margin"
-      const currentProfit = baseProfit + (approvedCharge - approvedCost);
-      const targetProfit = state.contractValue * (state.targetMarginPct / 100);
-
-      const currentMarginPct = state.contractValue > 0 ? (currentProfit / state.contractValue) * 100 : 0;
-      const targetMarginPct = state.targetMarginPct;
-
-      const marginLostDollars = currentProfit - targetProfit; // negative = lost vs target
-      const marginDeltaPct = currentMarginPct - targetMarginPct;
-
-      return {
-        baseProfit,
-        approvedCharge, approvedCost,
-        unapprovedCharge, unapprovedCost,
-        currentProfit,
-        targetProfit,
-        currentMarginPct,
-        targetMarginPct,
-        marginLostDollars,
-        marginDeltaPct
-      };
-    }
-
-    function resetDemo() {
-      saveState(structuredClone(DEFAULT_STATE));
-      location.reload();
-    }
+    const belowClass = portfolioBelowTarget < 0 ? "text-red-600" : "text-emerald-700";
   </script>
 
-  <header class="border-b bg-white">
-    <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+  <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="rounded-2xl bg-white border p-4">
+      <div class="text-sm text-slate-600">Active projects</div>
+      <div class="text-2xl font-semibold" id="kpiActive"></div>
+    </div>
+    <div class="rounded-2xl bg-white border p-4">
+      <div class="text-sm text-slate-600">Total contract value</div>
+      <div class="text-2xl font-semibold" id="kpiContract"></div>
+    </div>
+    <div class="rounded-2xl bg-white border p-4">
+      <div class="text-sm text-slate-600">Target portfolio margin</div>
+      <div class="text-2xl font-semibold" id="kpiTargetPct"></div>
+    </div>
+    <div class="rounded-2xl bg-white border p-4">
+      <div class="text-sm text-slate-600">Current portfolio margin</div>
+      <div class="text-2xl font-semibold" id="kpiCurrentPct"></div>
+    </div>
+  </div>
+
+  <div class="mt-4 rounded-2xl bg-white border p-5">
+    <div class="flex items-start justify-between gap-6">
       <div>
-        <div class="text-xl font-semibold">Profit Protection System</div>
-        <div class="text-sm text-slate-600">Clickable demo (no backend)</div>
+        <div class="text-sm text-slate-600">Portfolio headline</div>
+        <div class="text-3xl font-semibold mt-1" id="headline"></div>
+        <div class="text-sm text-slate-600 mt-2">This view exists for the director: which jobs are drifting and what’s the exposure right now.</div>
       </div>
-      <div class="flex gap-2">
-        <a href="variation.html" class="px-3 py-2 rounded-lg bg-slate-900 text-white text-sm">+ Add Variation</a>
-        <a href="approvals.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Approvals</a>
-        <a href="summary.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Summary</a>
-        <button onclick="resetDemo()" class="px-3 py-2 rounded-lg bg-white border text-sm">Reset</button>
-      </div>
-    </div>
-  </header>
-
-  <main class="mx-auto max-w-6xl px-4 py-6">
-    <script>
-      const state = loadState();
-      const m = calc(state);
-      const marginLostClass = m.marginLostDollars < 0 ? "text-red-600" : "text-emerald-700";
-    </script>
-
-    <div class="mb-4">
-      <div class="text-sm text-slate-600">Project</div>
-      <div class="text-2xl font-semibold" id="projectName"></div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div class="rounded-2xl bg-white border p-4">
-        <div class="text-sm text-slate-600">Contract Value</div>
-        <div class="text-2xl font-semibold" id="contractValue"></div>
-      </div>
-
-      <div class="rounded-2xl bg-white border p-4">
-        <div class="text-sm text-slate-600">Target Margin</div>
-        <div class="text-2xl font-semibold" id="targetMargin"></div>
-        <div class="text-sm text-slate-600 mt-1">Target profit: <span class="font-medium" id="targetProfit"></span></div>
-      </div>
-
-      <div class="rounded-2xl bg-white border p-4">
-        <div class="text-sm text-slate-600">Current Margin (approved variations only)</div>
-        <div class="text-2xl font-semibold" id="currentMargin"></div>
-        <div class="text-sm text-slate-600 mt-1">Current profit: <span class="font-medium" id="currentProfit"></span></div>
+      <div class="text-right">
+        <div class="text-sm text-slate-600">Estimated exposure</div>
+        <div class="text-3xl font-semibold mt-1" id="exposure"></div>
+        <div class="text-sm text-slate-600 mt-1">Unapproved variation value: <span class="font-medium" id="unapproved"></span></div>
       </div>
     </div>
+  </div>
 
-    <div class="mt-4 rounded-2xl bg-white border p-5">
-      <div class="flex items-start justify-between gap-4">
-        <div>
-          <div class="text-sm text-slate-600">Margin change moment</div>
-          <div class="text-3xl font-semibold mt-1" id="headline"></div>
-          <div class="text-sm text-slate-600 mt-2">
-            This is the “hook”: add a variation, approve it, and the margin updates.
-          </div>
-        </div>
-        <div class="text-right">
-          <div class="text-sm text-slate-600">Margin vs target</div>
-          <div class="text-3xl font-semibold mt-1" id="marginLost"></div>
-          <div class="text-sm text-slate-600 mt-1" id="marginDelta"></div>
-        </div>
+  <div class="mt-6 rounded-2xl bg-white border p-5">
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="text-lg font-semibold">Projects at a glance</div>
+        <div class="text-sm text-slate-600 mt-1">Click “Drill down” to open the project dashboard (demo uses Lot 24 as the drill-down project).</div>
       </div>
-
-      <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="rounded-xl bg-slate-50 border p-4">
-          <div class="text-sm text-slate-600">Approved variations</div>
-          <div class="mt-2 flex items-center justify-between">
-            <div class="text-sm">Client charges</div>
-            <div class="font-medium" id="approvedCharge"></div>
-          </div>
-          <div class="mt-1 flex items-center justify-between">
-            <div class="text-sm">Builder costs</div>
-            <div class="font-medium" id="approvedCost"></div>
-          </div>
-        </div>
-
-        <div class="rounded-xl bg-slate-50 border p-4">
-          <div class="text-sm text-slate-600">Unapproved variations (risk)</div>
-          <div class="mt-2 flex items-center justify-between">
-            <div class="text-sm">Client charges</div>
-            <div class="font-medium" id="unapprovedCharge"></div>
-          </div>
-          <div class="mt-1 flex items-center justify-between">
-            <div class="text-sm">Builder costs</div>
-            <div class="font-medium" id="unapprovedCost"></div>
-          </div>
-        </div>
-      </div>
+      <div class="text-sm text-slate-600">Risk = drift + exposure</div>
     </div>
 
-    <div class="mt-6 rounded-2xl bg-white border p-5">
-      <div class="flex items-center justify-between">
-        <div>
-          <div class="text-lg font-semibold">Recent Variations</div>
-          <div class="text-sm text-slate-600">Toggle approvals on the Approvals page.</div>
-        </div>
-        <a href="approvals.html" class="text-sm font-medium underline">Open approvals</a>
-      </div>
-      <div class="mt-4 overflow-x-auto">
-        <table class="min-w-full text-sm">
-          <thead class="text-left text-slate-600">
-            <tr class="border-b">
-              <th class="py-2 pr-4">ID</th>
-              <th class="py-2 pr-4">Description</th>
-              <th class="py-2 pr-4">Cost</th>
-              <th class="py-2 pr-4">Charge</th>
-              <th class="py-2 pr-4">Approved</th>
-            </tr>
-          </thead>
-          <tbody id="rows"></tbody>
-        </table>
-      </div>
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="text-left text-slate-600">
+          <tr class="border-b">
+            <th class="py-2 pr-4">Project</th>
+            <th class="py-2 pr-4">Contract</th>
+            <th class="py-2 pr-4">Target %</th>
+            <th class="py-2 pr-4">Current %</th>
+            <th class="py-2 pr-4">Drift</th>
+            <th class="py-2 pr-4">Approved vars</th>
+            <th class="py-2 pr-4">Unapproved vars</th>
+            <th class="py-2 pr-4">Risk</th>
+            <th class="py-2 pr-4"></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
     </div>
+  </div>
 
-    <script>
-      document.getElementById("projectName").textContent = state.projectName;
-      document.getElementById("contractValue").textContent = money(state.contractValue);
-      document.getElementById("targetMargin").textContent = `${m.targetMarginPct.toFixed(1)}%`;
-      document.getElementById("targetProfit").textContent = money(m.targetProfit);
-      document.getElementById("currentMargin").textContent = `${m.currentMarginPct.toFixed(1)}%`;
-      document.getElementById("currentProfit").textContent = money(m.currentProfit);
+  <script>
+    document.getElementById("kpiActive").textContent = String(activeProjects);
+    document.getElementById("kpiContract").textContent = money(totalContract);
+    document.getElementById("kpiTargetPct").textContent = `${targetPortfolioPct.toFixed(1)}%`;
+    document.getElementById("kpiCurrentPct").textContent = `${currentPortfolioPct.toFixed(1)}%`;
 
-      const headline = `Margin dropped from ${m.targetMarginPct.toFixed(1)}% to ${m.currentMarginPct.toFixed(1)}%`;
-      document.getElementById("headline").textContent = headline;
+    document.getElementById("headline").textContent =
+      `Portfolio is ${money(portfolioBelowTarget)} vs target margin`;
+    document.getElementById("headline").className = `text-3xl font-semibold mt-1 ${belowClass}`;
 
-      document.getElementById("marginLost").textContent = money(m.marginLostDollars);
-      document.getElementById("marginLost").className = `text-3xl font-semibold mt-1 ${m.marginLostDollars < 0 ? "text-red-600" : "text-emerald-700"}`;
-      document.getElementById("marginDelta").textContent = `${m.marginDeltaPct >= 0 ? "+" : ""}${m.marginDeltaPct.toFixed(1)}% vs target`;
+    document.getElementById("exposure").textContent = money(exposureTotal);
+    document.getElementById("unapproved").textContent = money(unapprovedTotal);
 
-      document.getElementById("approvedCharge").textContent = money(m.approvedCharge);
-      document.getElementById("approvedCost").textContent = money(m.approvedCost);
-      document.getElementById("unapprovedCharge").textContent = money(m.unapprovedCharge);
-      document.getElementById("unapprovedCost").textContent = money(m.unapprovedCost);
-
-      const rows = document.getElementById("rows");
-      const recent = [...state.variations].slice(-6).reverse();
-      rows.innerHTML = recent.map(v => `
-        <tr class="border-b">
-          <td class="py-2 pr-4 font-medium">${v.id}</td>
-          <td class="py-2 pr-4">${v.desc}</td>
-          <td class="py-2 pr-4">${money(v.cost)}</td>
-          <td class="py-2 pr-4">${money(v.charge)}</td>
-          <td class="py-2 pr-4">${v.approved ? "Yes" : "No"}</td>
+    const tbody = document.getElementById("tbody");
+    tbody.innerHTML = rows.map(({p,m}) => {
+      const driftClass = m.driftDollars < 0 ? "text-red-600" : "text-emerald-700";
+      const approvedVars = money(Number(p.approvedVarCharge||0));
+      const unapprovedVars = money(Number(p.unapprovedVarCharge||0));
+      const drill = (p.name === "Lot 24 – Bardia")
+        ? `<a href="index.html" class="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs">Drill down</a>`
+        : `<span class="text-xs text-slate-500">Demo drill-down</span>`;
+      return `
+        <tr class="border-b align-top">
+          <td class="py-2 pr-4">
+            <div class="font-medium">${p.name}</div>
+            <div class="text-xs text-slate-500">${p.id}</div>
+          </td>
+          <td class="py-2 pr-4">${money(p.contract)}</td>
+          <td class="py-2 pr-4">${Number(p.targetPct).toFixed(1)}%</td>
+          <td class="py-2 pr-4">${m.currentPct.toFixed(1)}%</td>
+          <td class="py-2 pr-4 ${driftClass}">
+            <div class="font-medium">${money(m.driftDollars)}</div>
+            <div class="text-xs">${m.driftPct >= 0 ? "+" : ""}${m.driftPct.toFixed(1)}% vs target</div>
+          </td>
+          <td class="py-2 pr-4">${approvedVars}</td>
+          <td class="py-2 pr-4">${unapprovedVars}</td>
+          <td class="py-2 pr-4">${riskBadge(m.risk)}</td>
+          <td class="py-2 pr-4">${drill}</td>
         </tr>
-      `).join("");
-    </script>
-  </main>
+      `;
+    }).join("");
+  </script>
+</main>
 </body>
 </html>
