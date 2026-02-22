@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Profit Protection Demo — Add Variation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <script>
+    function loadState() {
+      const raw = localStorage.getItem("pp_demo_state");
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch { return null; }
+    }
+    function saveState(state) {
+      localStorage.setItem("pp_demo_state", JSON.stringify(state));
+    }
+    function money(n) {
+      const x = Number(n || 0);
+      return x.toLocaleString("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
+    }
+    function ensureState() {
+      let s = loadState();
+      if (!s) {
+        // If user opened this page first, initialize minimal state
+        s = {
+          projectName: "Lot 24 – Bardia",
+          contractValue: 780000,
+          estimatedCost: 639600,
+          targetMarginPct: 18,
+          variations: []
+        };
+        saveState(s);
+      }
+      if (!Array.isArray(s.variations)) s.variations = [];
+      return s;
+    }
+
+    const state = ensureState();
+
+    function nextId() {
+      // V-001 style
+      const nums = state.variations
+        .map(v => String(v.id || "").match(/(\d+)/))
+        .filter(Boolean)
+        .map(m => Number(m[1]));
+      const max = nums.length ? Math.max(...nums) : 0;
+      const n = String(max + 1).padStart(3, "0");
+      return `V-${n}`;
+    }
+
+    function addVariation(e) {
+      e.preventDefault();
+      const id = document.getElementById("vid").value.trim() || nextId();
+      const desc = document.getElementById("desc").value.trim() || "Variation item";
+      const cost = Number(document.getElementById("cost").value || 0);
+      const charge = Number(document.getElementById("charge").value || 0);
+      const sent = document.getElementById("sent").checked;
+      const approved = document.getElementById("approved").checked;
+      const paid = document.getElementById("paid").checked;
+
+      state.variations.push({ id, desc, cost, charge, sent, approved, paid });
+      saveState(state);
+
+      // Go to dashboard for the “moment”
+      window.location.href = "index.html";
+    }
+  </script>
+
+  <header class="border-b bg-white">
+    <div class="mx-auto max-w-3xl px-4 py-4 flex items-center justify-between">
+      <div>
+        <div class="text-xl font-semibold">Profit Protection System</div>
+        <div class="text-sm text-slate-600">Add a variation (demo)</div>
+      </div>
+      <div class="flex gap-2">
+        <a href="index.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Dashboard</a>
+        <a href="approvals.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Approvals</a>
+        <a href="summary.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Summary</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-3xl px-4 py-6">
+    <div class="rounded-2xl bg-white border p-5">
+      <div class="text-lg font-semibold">Variation Entry</div>
+      <div class="text-sm text-slate-600 mt-1">Enter numbers and click “Update Project Margin”.</div>
+
+      <form class="mt-5 space-y-4" onsubmit="addVariation(event)">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="text-sm text-slate-600">Variation #</label>
+            <input id="vid" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="V-014"/>
+            <div class="text-xs text-slate-500 mt-1">Leave blank to auto-generate.</div>
+          </div>
+          <div class="md:col-span-2">
+            <label class="text-sm text-slate-600">Description</label>
+            <input id="desc" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="e.g., Upgrade stone benchtop"/>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="text-sm text-slate-600">Cost to builder (AUD)</label>
+            <input id="cost" type="number" step="1" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="3200" required/>
+          </div>
+          <div>
+            <label class="text-sm text-slate-600">Client charge (AUD)</label>
+            <input id="charge" type="number" step="1" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="4500" required/>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label class="flex items-center gap-2 rounded-lg border bg-slate-50 px-3 py-2 text-sm">
+            <input id="sent" type="checkbox" class="h-4 w-4" checked/>
+            Sent to client
+          </label>
+          <label class="flex items-center gap-2 rounded-lg border bg-slate-50 px-3 py-2 text-sm">
+            <input id="approved" type="checkbox" class="h-4 w-4"/>
+            Approved
+          </label>
+          <label class="flex items-center gap-2 rounded-lg border bg-slate-50 px-3 py-2 text-sm">
+            <input id="paid" type="checkbox" class="h-4 w-4"/>
+            Paid
+          </label>
+        </div>
+
+        <div class="flex items-center justify-between pt-2">
+          <a href="index.html" class="text-sm underline">Cancel</a>
+          <button class="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm">
+            Update Project Margin
+          </button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <script>
+    // Pre-fill an ID suggestion
+    document.getElementById("vid").placeholder = nextId();
+  </script>
+</body>
+</html>

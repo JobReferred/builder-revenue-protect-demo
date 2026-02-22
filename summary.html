@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Profit Protection Demo — Summary</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <script>
+    function loadState() {
+      const raw = localStorage.getItem("pp_demo_state");
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch { return null; }
+    }
+    function saveState(state) {
+      localStorage.setItem("pp_demo_state", JSON.stringify(state));
+    }
+    function ensureState() {
+      let s = loadState();
+      if (!s) {
+        s = { projectName: "Lot 24 – Bardia", contractValue: 780000, estimatedCost: 639600, targetMarginPct: 18, variations: [] };
+        saveState(s);
+      }
+      if (!Array.isArray(s.variations)) s.variations = [];
+      return s;
+    }
+    function money(n) {
+      const x = Number(n || 0);
+      return x.toLocaleString("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
+    }
+
+    const state = ensureState();
+
+    function compute() {
+      let totalAdded = 0;
+      let approved = 0;
+      let unapproved = 0;
+
+      let estLossFromUnderpricing = 0;
+
+      for (const v of state.variations) {
+        const cost = Number(v.cost || 0);
+        const charge = Number(v.charge || 0);
+        totalAdded += charge;
+
+        if (v.approved) approved += charge;
+        else unapproved += charge;
+
+        // Simple “underpricing” heuristic for demo:
+        // If charge < cost, treat difference as loss.
+        if (charge < cost) estLossFromUnderpricing += (cost - charge);
+      }
+
+      return { totalAdded, approved, unapproved, estLossFromUnderpricing };
+    }
+
+    const s = compute();
+  </script>
+
+  <header class="border-b bg-white">
+    <div class="mx-auto max-w-4xl px-4 py-4 flex items-center justify-between">
+      <div>
+        <div class="text-xl font-semibold">Profit Protection System</div>
+        <div class="text-sm text-slate-600">Margin impact summary (demo)</div>
+      </div>
+      <div class="flex gap-2">
+        <a href="index.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Dashboard</a>
+        <a href="variation.html" class="px-3 py-2 rounded-lg bg-white border text-sm">+ Add Variation</a>
+        <a href="approvals.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Approvals</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-4xl px-4 py-6">
+    <div class="rounded-2xl bg-white border p-5">
+      <div class="text-lg font-semibold">Summary for <span id="pname"></span></div>
+      <div class="text-sm text-slate-600 mt-1">Quick stats you can talk through in meetings.</div>
+
+      <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="rounded-xl bg-slate-50 border p-4">
+          <div class="text-sm text-slate-600">Total variations added (client charges)</div>
+          <div class="text-2xl font-semibold mt-1" id="totalAdded"></div>
+        </div>
+
+        <div class="rounded-xl bg-slate-50 border p-4">
+          <div class="text-sm text-slate-600">Approved</div>
+          <div class="text-2xl font-semibold mt-1" id="approved"></div>
+        </div>
+
+        <div class="rounded-xl bg-slate-50 border p-4">
+          <div class="text-sm text-slate-600">Unapproved (risk)</div>
+          <div class="text-2xl font-semibold mt-1" id="unapproved"></div>
+        </div>
+
+        <div class="rounded-xl bg-slate-50 border p-4">
+          <div class="text-sm text-slate-600">Estimated loss from underpricing</div>
+          <div class="text-2xl font-semibold mt-1 text-red-600" id="loss"></div>
+          <div class="text-xs text-slate-500 mt-1">Heuristic: counts only where charge &lt; cost.</div>
+        </div>
+      </div>
+
+      <div class="mt-5 rounded-xl border bg-white p-4">
+        <div class="text-sm text-slate-600">Talk track line</div>
+        <div class="text-lg font-semibold mt-1">
+          “This is where margin leaks: unapproved variations and underpriced changes.”
+        </div>
+      </div>
+    </div>
+
+    <script>
+      document.getElementById("pname").textContent = state.projectName;
+      document.getElementById("totalAdded").textContent = money(s.totalAdded);
+      document.getElementById("approved").textContent = money(s.approved);
+      document.getElementById("unapproved").textContent = money(s.unapproved);
+      document.getElementById("loss").textContent = money(s.estLossFromUnderpricing);
+    </script>
+  </main>
+</body>
+</html>

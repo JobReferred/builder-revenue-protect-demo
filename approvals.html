@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Profit Protection Demo — Approvals</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <script>
+    function loadState() {
+      const raw = localStorage.getItem("pp_demo_state");
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch { return null; }
+    }
+    function saveState(state) {
+      localStorage.setItem("pp_demo_state", JSON.stringify(state));
+    }
+    function money(n) {
+      const x = Number(n || 0);
+      return x.toLocaleString("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
+    }
+    function ensureState() {
+      let s = loadState();
+      if (!s) {
+        s = { projectName: "Lot 24 – Bardia", contractValue: 780000, estimatedCost: 639600, targetMarginPct: 18, variations: [] };
+        saveState(s);
+      }
+      if (!Array.isArray(s.variations)) s.variations = [];
+      return s;
+    }
+
+    const state = ensureState();
+
+    function toggle(i, field) {
+      state.variations[i][field] = !state.variations[i][field];
+      saveState(state);
+      render();
+    }
+
+    function render() {
+      const tbody = document.getElementById("tbody");
+      if (state.variations.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td class="py-4 text-slate-600" colspan="6">
+              No variations yet. <a class="underline" href="variation.html">Add one</a>.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = state.variations.map((v, i) => {
+        const impact = Number(v.charge || 0) - Number(v.cost || 0);
+        const impactClass = impact < 0 ? "text-red-600" : "text-emerald-700";
+        return `
+          <tr class="border-b align-top">
+            <td class="py-2 pr-4 font-medium">${v.id}</td>
+            <td class="py-2 pr-4">${v.desc}</td>
+            <td class="py-2 pr-4">${money(v.cost)}</td>
+            <td class="py-2 pr-4">${money(v.charge)}</td>
+
+            <td class="py-2 pr-4">
+              <button onclick="toggle(${i}, 'sent')" class="px-2 py-1 rounded-md border text-xs ${v.sent ? 'bg-slate-900 text-white border-slate-900' : 'bg-white'}">
+                ${v.sent ? "Sent" : "Not sent"}
+              </button>
+            </td>
+
+            <td class="py-2 pr-4">
+              <button onclick="toggle(${i}, 'approved')" class="px-2 py-1 rounded-md border text-xs ${v.approved ? 'bg-slate-900 text-white border-slate-900' : 'bg-white'}">
+                ${v.approved ? "Approved" : "Not approved"}
+              </button>
+              <div class="text-xs mt-1 ${impactClass}">
+                Margin impact: ${money(impact)}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+  </script>
+
+  <header class="border-b bg-white">
+    <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+      <div>
+        <div class="text-xl font-semibold">Profit Protection System</div>
+        <div class="text-sm text-slate-600">Client approval tracker (demo)</div>
+      </div>
+      <div class="flex gap-2">
+        <a href="index.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Dashboard</a>
+        <a href="variation.html" class="px-3 py-2 rounded-lg bg-slate-900 text-white text-sm">+ Add Variation</a>
+        <a href="summary.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Summary</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-6xl px-4 py-6">
+    <div class="rounded-2xl bg-white border p-5">
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <div class="text-lg font-semibold">Approvals</div>
+          <div class="text-sm text-slate-600 mt-1">Toggle “Approved” and go back to Dashboard to show margin change.</div>
+        </div>
+      </div>
+
+      <div class="mt-4 overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="text-left text-slate-600">
+            <tr class="border-b">
+              <th class="py-2 pr-4">ID</th>
+              <th class="py-2 pr-4">Description</th>
+              <th class="py-2 pr-4">Cost</th>
+              <th class="py-2 pr-4">Charge</th>
+              <th class="py-2 pr-4">Sent</th>
+              <th class="py-2 pr-4">Approved</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>render();</script>
+</body>
+</html>
