@@ -3,127 +3,212 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Profit Protection Demo — Approvals</title>
+  <title>Profit Protection System — Approvals</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-50 text-slate-900">
-  <script>
-    function loadState() {
-      const raw = localStorage.getItem("pp_demo_state");
-      if (!raw) return null;
-      try { return JSON.parse(raw); } catch { return null; }
-    }
-    function saveState(state) {
-      localStorage.setItem("pp_demo_state", JSON.stringify(state));
-    }
-    function money(n) {
-      const x = Number(n || 0);
-      return x.toLocaleString("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
-    }
-    function ensureState() {
-      let s = loadState();
-      if (!s) {
-        s = { projectName: "Lot 24 – Bardia", contractValue: 780000, estimatedCost: 639600, targetMarginPct: 18, variations: [] };
-        saveState(s);
-      }
-      if (!Array.isArray(s.variations)) s.variations = [];
-      return s;
-    }
+<header class="border-b bg-white">
+  <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+    <div>
+      <div class="text-xl font-semibold">Profit Protection System</div>
+      <div class="text-sm text-slate-600">Approvals</div>
+    </div>
+    <div class="flex gap-2">
+      <a href="index.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Portfolio</a>
+      <a id="navProject" href="project.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Project</a>
+      <a id="navAdd" href="variation.html" class="px-3 py-2 rounded-lg bg-white border text-sm">+ Add Variation</a>
+      <a id="navSummary" href="summary.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Summary</a>
+    </div>
+  </div>
+</header>
 
-    const state = ensureState();
-
-    function toggle(i, field) {
-      state.variations[i][field] = !state.variations[i][field];
-      saveState(state);
-      render();
-    }
-
-    function render() {
-      const tbody = document.getElementById("tbody");
-      if (state.variations.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td class="py-4 text-slate-600" colspan="6">
-              No variations yet. <a class="underline" href="variation.html">Add one</a>.
-            </td>
-          </tr>
-        `;
-        return;
-      }
-
-      tbody.innerHTML = state.variations.map((v, i) => {
-        const impact = Number(v.charge || 0) - Number(v.cost || 0);
-        const impactClass = impact < 0 ? "text-red-600" : "text-emerald-700";
-        return `
-          <tr class="border-b align-top">
-            <td class="py-2 pr-4 font-medium">${v.id}</td>
-            <td class="py-2 pr-4">${v.desc}</td>
-            <td class="py-2 pr-4">${money(v.cost)}</td>
-            <td class="py-2 pr-4">${money(v.charge)}</td>
-
-            <td class="py-2 pr-4">
-              <button onclick="toggle(${i}, 'sent')" class="px-2 py-1 rounded-md border text-xs ${v.sent ? 'bg-slate-900 text-white border-slate-900' : 'bg-white'}">
-                ${v.sent ? "Sent" : "Not sent"}
-              </button>
-            </td>
-
-            <td class="py-2 pr-4">
-              <button onclick="toggle(${i}, 'approved')" class="px-2 py-1 rounded-md border text-xs ${v.approved ? 'bg-slate-900 text-white border-slate-900' : 'bg-white'}">
-                ${v.approved ? "Approved" : "Not approved"}
-              </button>
-              <div class="text-xs mt-1 ${impactClass}">
-                Margin impact: ${money(impact)}
-              </div>
-            </td>
-          </tr>
-        `;
-      }).join("");
-    }
-  </script>
-
-  <header class="border-b bg-white">
-    <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+<main class="mx-auto max-w-6xl px-4 py-6">
+  <div class="rounded-2xl bg-white border p-5">
+    <div class="flex items-start justify-between gap-4">
       <div>
-        <div class="text-xl font-semibold">Profit Protection System</div>
-        <div class="text-sm text-slate-600">Client approval tracker (demo)</div>
+        <div class="text-sm text-slate-600">Toggle approval to show margin impact (approved affects margin; unapproved contributes to exposure).</div>
+        <div class="text-sm text-slate-500 mt-1">Project: <span class="font-medium" id="projName"></span></div>
       </div>
-      <div class="flex gap-2">
-        <a href="index.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Portfolio</a>
-        <a href="project.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Dashboard</a>
-        <a href="variation.html" class="px-3 py-2 rounded-lg bg-slate-900 text-white text-sm">+ Add Variation</a>
-        <a href="summary.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Summary</a>
-        <a href="policy.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Policy</a>
-      </div>
+      <button id="resetBtn" class="px-3 py-2 rounded-lg bg-white border text-sm">Reset variations (this job)</button>
     </div>
-  </header>
 
-  <main class="mx-auto max-w-6xl px-4 py-6">
-    <div class="rounded-2xl bg-white border p-5">
-      <div class="flex items-center justify-between gap-4">
-        <div>
-          <div class="text-lg font-semibold">Approvals</div>
-          <div class="text-sm text-slate-600 mt-1">Toggle “Approved” and go back to Dashboard to show margin change.</div>
-        </div>
-      </div>
-
-      <div class="mt-4 overflow-x-auto">
-        <table class="min-w-full text-sm">
-          <thead class="text-left text-slate-600">
-            <tr class="border-b">
-              <th class="py-2 pr-4">ID</th>
-              <th class="py-2 pr-4">Description</th>
-              <th class="py-2 pr-4">Cost</th>
-              <th class="py-2 pr-4">Charge</th>
-              <th class="py-2 pr-4">Sent</th>
-              <th class="py-2 pr-4">Approved</th>
-            </tr>
-          </thead>
-          <tbody id="tbody"></tbody>
-        </table>
-      </div>
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="text-left text-slate-600">
+          <tr class="border-b">
+            <th class="py-2 pr-4">ID</th>
+            <th class="py-2 pr-4">Description</th>
+            <th class="py-2 pr-4">Cost</th>
+            <th class="py-2 pr-4">Charge</th>
+            <th class="py-2 pr-4">Approved</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div id="empty" class="hidden text-sm text-slate-500 mt-3">No variations for this project yet. Use “+ Add Variation”.</div>
     </div>
-  </main>
+  </div>
+</main>
 
-  <script>render();</script>
+<script>
+
+const PORTFOLIO_KEY = "pp_demo_portfolio";
+const POLICY_KEY = "pp_demo_policy";
+
+const DEFAULT_POLICY = {
+  minVariationMarginPct: 15,
+  projectDriftTolerancePct: 1.0,
+  portfolioDriftTolerancePct: 1.0,
+  exposureThreshold: 20000,
+  portfolioTargetOverridePct: null
+};
+
+const DEFAULT_PORTFOLIO = {"ownerName": "Director View", "projects": [{"id": "P-024", "name": "Lot 24 – Bardia", "contract": 780000, "targetPct": 18.0, "stages": [{"name": "Preliminaries", "planned": 95000, "actual": 0, "forecast": 98000, "claimPct": 10}, {"name": "Slab / Frame", "planned": 160000, "actual": 0, "forecast": 165000, "claimPct": 25}, {"name": "Lock-up", "planned": 135000, "actual": 0, "forecast": 137000, "claimPct": 25}, {"name": "Fix-out", "planned": 145000, "actual": 0, "forecast": 147000, "claimPct": 25}, {"name": "Completion", "planned": 111200, "actual": 0, "forecast": 103100, "claimPct": 15}], "variations": [{"id": "V-101", "desc": "Upgraded kitchen splashback", "cost": 1200, "charge": 2200, "approved": true}, {"id": "V-102", "desc": "Extra downlights (living + kitchen)", "cost": 850, "charge": 1500, "approved": true}, {"id": "V-103", "desc": "Driveway finish upgrade", "cost": 3250, "charge": 4500, "approved": false}, {"id": "V-104", "desc": "External power point allowance", "cost": -100, "charge": 0, "approved": false}]}, {"id": "P-031", "name": "Lot 31 – Oran Park", "contract": 920000, "targetPct": 19.0, "stages": [{"name": "Preliminaries", "planned": 110000, "actual": 0, "forecast": 118000, "claimPct": 10}, {"name": "Slab / Frame", "planned": 190000, "actual": 0, "forecast": 205000, "claimPct": 25}, {"name": "Lock-up", "planned": 170000, "actual": 0, "forecast": 175000, "claimPct": 25}, {"name": "Fix-out", "planned": 165000, "actual": 0, "forecast": 172000, "claimPct": 25}, {"name": "Completion", "planned": 285200, "actual": 0, "forecast": 285000, "claimPct": 15}], "variations": [{"id": "V-201", "desc": "Facade upgrade (brick + render)", "cost": 9000, "charge": 12000, "approved": true}, {"id": "V-202", "desc": "Electrical upgrade package (missing client charge)", "cost": 6500, "charge": 0, "approved": true}, {"id": "V-203", "desc": "Extra insulation allowance", "cost": 4000, "charge": 8000, "approved": false}]}, {"id": "P-019", "name": "Lot 19 – Edmondson Park", "contract": 650000, "targetPct": 17.0, "stages": [{"name": "Preliminaries", "planned": 80000, "actual": 0, "forecast": 83000, "claimPct": 10}, {"name": "Slab / Frame", "planned": 135000, "actual": 0, "forecast": 140000, "claimPct": 25}, {"name": "Lock-up", "planned": 120000, "actual": 0, "forecast": 124000, "claimPct": 25}, {"name": "Fix-out", "planned": 115000, "actual": 0, "forecast": 118000, "claimPct": 25}, {"name": "Completion", "planned": 89500, "actual": 0, "forecast": 89500, "claimPct": 15}], "variations": [{"id": "V-301", "desc": "Kitchen upgrade allowance", "cost": 4200, "charge": 6000, "approved": true}, {"id": "V-302", "desc": "Extra tiling (main areas)", "cost": 14000, "charge": 18000, "approved": false}]}, {"id": "P-044", "name": "Lot 44 – Austral", "contract": 840000, "targetPct": 18.0, "stages": [{"name": "Preliminaries", "planned": 100000, "actual": 0, "forecast": 101000, "claimPct": 10}, {"name": "Slab / Frame", "planned": 175000, "actual": 0, "forecast": 180000, "claimPct": 25}, {"name": "Lock-up", "planned": 155000, "actual": 0, "forecast": 160000, "claimPct": 25}, {"name": "Fix-out", "planned": 150000, "actual": 0, "forecast": 152000, "claimPct": 25}, {"name": "Completion", "planned": 90000, "actual": 0, "forecast": 90000, "claimPct": 15}], "variations": [{"id": "V-401", "desc": "Bathroom upgrade pack", "cost": 7100, "charge": 9500, "approved": true}]}]};
+
+function structuredCloneSafe(obj){ return JSON.parse(JSON.stringify(obj)); }
+
+function ensurePortfolio() {
+  try {
+    const raw = localStorage.getItem(PORTFOLIO_KEY);
+    if (!raw) {
+      localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(DEFAULT_PORTFOLIO));
+      return structuredCloneSafe(DEFAULT_PORTFOLIO);
+    }
+    const p = JSON.parse(raw);
+    if (!p || typeof p !== "object" || !Array.isArray(p.projects)) throw new Error("bad portfolio");
+    for (const prj of p.projects) {
+      if (!Array.isArray(prj.variations)) prj.variations = [];
+      if (!Array.isArray(prj.stages)) prj.stages = [];
+    }
+    localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(p));
+    return p;
+  } catch {
+    localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(DEFAULT_PORTFOLIO));
+    return structuredCloneSafe(DEFAULT_PORTFOLIO);
+  }
+}
+
+function savePortfolio(p){ localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(p)); }
+
+function getPid() {
+  const u = new URL(location.href);
+  return u.searchParams.get("pid") || localStorage.getItem("pp_demo_current_pid") || "P-024";
+}
+
+function setCurrentPid(pid) {
+  localStorage.setItem("pp_demo_current_pid", pid);
+}
+
+function projectPage(pid){
+  return ({"P-024":"project.html","P-031":"project_p031.html","P-019":"project_p019.html","P-044":"project_p044.html"}[pid]) || "project.html";
+}
+
+function money(n){
+  const x = Number(n||0);
+  return x.toLocaleString("en-AU",{style:"currency",currency:"AUD",maximumFractionDigits:0});
+}
+
+function pct(n){ return `${Number(n||0).toFixed(1)}%`; }
+
+function sum(arr, fn){
+  let t=0; for (const x of (arr||[])) t += Number(fn(x)||0); return t;
+}
+
+function calcProject(prj){
+  const contract = Number(prj.contract||0);
+  const targetPct = Number(prj.targetPct||0);
+
+  const stageForecast = sum(prj.stages, s => (s.forecast ?? s.planned));
+
+  const approved = (prj.variations||[]).filter(v=>!!v.approved);
+  const unapproved = (prj.variations||[]).filter(v=>!v.approved);
+
+  const approvedCharge = sum(approved, v=>v.charge);
+  const approvedCost = sum(approved, v=>v.cost);
+  const unapprovedCharge = sum(unapproved, v=>v.charge);
+  const unapprovedCost = sum(unapproved, v=>v.cost);
+
+  const revenue = contract + approvedCharge;
+  const forecastFinalCost = stageForecast + approvedCost;
+
+  const currentProfit = revenue - forecastFinalCost;
+  const currentMarginPct = revenue>0 ? (currentProfit/revenue)*100 : 0;
+
+  const targetProfit = contract * (targetPct/100);
+  const driftDollars = currentProfit - targetProfit;
+  const driftPct = currentMarginPct - targetPct;
+
+  const exposure = Math.max(0, unapprovedCost - unapprovedCharge);
+
+  let risk="Low";
+  if (driftPct <= -2 || driftDollars <= -25000) risk="High";
+  else if (driftPct <= -1 || driftDollars <= -10000) risk="Med";
+
+  return {
+    contract,targetPct,targetProfit,
+    approvedCharge,approvedCost,unapprovedCharge,unapprovedCost,
+    revenue,forecastFinalCost,currentProfit,currentMarginPct,
+    driftDollars,driftPct,exposure,risk
+  };
+}
+
+
+const pid = getPid();
+setCurrentPid(pid);
+const portfolio = ensurePortfolio();
+const prj = portfolio.projects.find(p=>p.id===pid) || portfolio.projects[0];
+
+document.getElementById("navProject").href = `${projectPage(pid)}?pid=${pid}`;
+document.getElementById("navAdd").href = `variation.html?pid=${pid}`;
+document.getElementById("navSummary").href = `summary.html?pid=${pid}`;
+
+document.getElementById("projName").textContent = `${prj.name} (${prj.id})`;
+
+const tbody = document.getElementById("tbody");
+const empty = document.getElementById("empty");
+
+function render(){
+  const list = prj.variations || [];
+  if(!list.length){
+    tbody.innerHTML = "";
+    empty.classList.remove("hidden");
+    return;
+  }
+  empty.classList.add("hidden");
+  tbody.innerHTML = list.map((v, idx)=>`
+    <tr class="border-b">
+      <td class="py-2 pr-4 font-medium">${v.id}</td>
+      <td class="py-2 pr-4">${v.desc}</td>
+      <td class="py-2 pr-4">${money(v.cost)}</td>
+      <td class="py-2 pr-4">${money(v.charge)}</td>
+      <td class="py-2 pr-4">
+        <label class="inline-flex items-center gap-2">
+          <input type="checkbox" ${v.approved ? "checked":""} data-i="${idx}"/>
+          <span>${v.approved ? "Yes":"No"}</span>
+        </label>
+      </td>
+    </tr>
+  `).join("");
+
+  tbody.querySelectorAll("input[type=checkbox]").forEach(cb=>{
+    cb.addEventListener("change",(e)=>{
+      const i = Number(e.target.getAttribute("data-i"));
+      prj.variations[i].approved = e.target.checked;
+      savePortfolio(portfolio);
+      render();
+    });
+  });
+}
+
+document.getElementById("resetBtn").addEventListener("click",()=>{
+  const seed = structuredCloneSafe(DEFAULT_PORTFOLIO);
+  const seedPrj = seed.projects.find(p=>p.id===pid);
+  prj.variations = seedPrj ? structuredCloneSafe(seedPrj.variations) : [];
+  savePortfolio(portfolio);
+  render();
+});
+
+render();
+</script>
 </body>
 </html>

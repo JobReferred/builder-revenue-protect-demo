@@ -3,130 +3,312 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Profit Protection Demo — Policy Settings</title>
+  <title>Profit Protection Demo — Policy</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  
 </head>
 <body class="bg-slate-50 text-slate-900">
+
 <script>
+
+  const PORTFOLIO_KEY = "pp_demo_portfolio";
   const POLICY_KEY = "pp_demo_policy";
 
   const DEFAULT_POLICY = {
-    minVariationMarginPct: 15,      // variation margin floor (% of charge)
-    projectDriftTolerancePct: 1.0,  // allowed drop vs target margin (% points)
-    portfolioDriftTolerancePct: 1.0,// allowed drop vs target portfolio margin (% points)
-    exposureThreshold: 20000        // optional (AUD), for future alerts
+    minVariationMarginPct: 15,
+    projectDriftTolerancePct: 1.0,
+    portfolioDriftTolerancePct: 1.0,
+    exposureThreshold: 20000,
+    portfolioTargetMarginPct: null,           // optional override
+    defaultProjectTargetMarginPct: 18.0       // for new projects / reset
   };
 
-  function loadPolicy() {
-    try {
+  const DEFAULT_PORTFOLIO = {
+    ownerName: "Director View",
+    // If set, portfolio target margin uses this instead of weighted project targets
+    portfolioTargetMarginPct: null,
+    defaultProjectTargetMarginPct: 18.0,
+    projects: [
+      {
+        id:"P-024", name:"Lot 24 – Bardia",
+        contract:780000, targetPct:18.0,
+        // Stage budget (planned/actual/forecast) - editable actual/forecast
+        stages: [
+          { key:"prelim", label:"1. Preliminaries / Site", planned:120000, actual:0, forecast:120000 },
+          { key:"frame",  label:"2. Slab / Frame",          planned:180000, actual:0, forecast:180000 },
+          { key:"lockup", label:"3. Lock-up / Rough-ins",   planned:150000, actual:0, forecast:150000 },
+          { key:"fixout", label:"4. Fix-out / Fit-off",     planned:140000, actual:0, forecast:140000 },
+          { key:"pcomp",  label:"5. Practical completion",  planned:56200,  actual:0, forecast:56200  },
+        ],
+        // Variations belong to project
+        variations: [
+          { id:"V-101", desc:"Upgraded kitchen splashback", cost:1200, charge:2200, approved:true },
+          { id:"V-102", desc:"Extra downlights (living + kitchen)", cost:850, charge:1500, approved:true },
+          { id:"V-103", desc:"Driveway finish upgrade", cost:3250, charge:4500, approved:false },
+          { id:"V-104", desc:"External power point allowance", cost:-100, charge:0, approved:false },
+        ]
+      },
+      {
+        id:"P-031", name:"Lot 31 – Oran Park",
+        contract:920000, targetPct:19.0,
+        stages: [
+          { key:"prelim", label:"1. Preliminaries / Site", planned:150000, actual:0, forecast:155000 },
+          { key:"frame",  label:"2. Slab / Frame",          planned:220000, actual:0, forecast:240000 },
+          { key:"lockup", label:"3. Lock-up / Rough-ins",   planned:190000, actual:0, forecast:205000 },
+          { key:"fixout", label:"4. Fix-out / Fit-off",     planned:170000, actual:0, forecast:175000 },
+          { key:"pcomp",  label:"5. Practical completion",  planned:42000,  actual:0, forecast:44000  },
+        ],
+        variations: [
+          { id:"V-201", desc:"Bathroom upgrade package", cost:12000, charge:12000, approved:true },
+          { id:"V-202", desc:"Extra cabinetry", cost:3500, charge:4500, approved:false },
+          { id:"V-203", desc:"Rock excavation allowance", cost:6000, charge:3500, approved:false },
+        ]
+      },
+      {
+        id:"P-019", name:"Lot 19 – Edmondson Park",
+        contract:650000, targetPct:17.0,
+        stages: [
+          { key:"prelim", label:"1. Preliminaries / Site", planned:100000, actual:0, forecast:105000 },
+          { key:"frame",  label:"2. Slab / Frame",          planned:150000, actual:0, forecast:150000 },
+          { key:"lockup", label:"3. Lock-up / Rough-ins",   planned:140000, actual:0, forecast:148000 },
+          { key:"fixout", label:"4. Fix-out / Fit-off",     planned:115000, actual:0, forecast:118000 },
+          { key:"pcomp",  label:"5. Practical completion",  planned:45000,  actual:0, forecast:46500  },
+        ],
+        variations: [
+          { id:"V-301", desc:"Window upgrade", cost:4200, charge:6000, approved:true },
+          { id:"V-302", desc:"Additional landscaping", cost:14000, charge:18000, approved:false },
+        ]
+      },
+      {
+        id:"P-044", name:"Lot 44 – Austral",
+        contract:840000, targetPct:18.0,
+        stages: [
+          { key:"prelim", label:"1. Preliminaries / Site", planned:130000, actual:0, forecast:135000 },
+          { key:"frame",  label:"2. Slab / Frame",          planned:210000, actual:0, forecast:215000 },
+          { key:"lockup", label:"3. Lock-up / Rough-ins",   planned:190000, actual:0, forecast:195000 },
+          { key:"fixout", label:"4. Fix-out / Fit-off",     planned:160000, actual:0, forecast:160000 },
+          { key:"pcomp",  label:"5. Practical completion",  planned:30000,  actual:0, forecast:30000  },
+        ],
+        variations: [
+          { id:"V-401", desc:"Facade upgrade", cost:7100, charge:9500, approved:true },
+        ]
+      },
+    ]
+  };
+
+  function deepClone(obj){ return JSON.parse(JSON.stringify(obj)); }
+
+  function loadPolicy(){
+    try{
       const raw = localStorage.getItem(POLICY_KEY);
-      if (!raw) return structuredClone(DEFAULT_POLICY);
+      if(!raw) return deepClone(DEFAULT_POLICY);
       const p = JSON.parse(raw);
-      return {
-        ...structuredClone(DEFAULT_POLICY),
-        ...p
-      };
-    } catch {
-      return structuredClone(DEFAULT_POLICY);
+      return { ...deepClone(DEFAULT_POLICY), ...p };
+    }catch{ return deepClone(DEFAULT_POLICY); }
+  }
+  function savePolicy(p){ localStorage.setItem(POLICY_KEY, JSON.stringify(p)); }
+
+  function loadPortfolio(){
+    try{
+      const raw = localStorage.getItem(PORTFOLIO_KEY);
+      if(!raw) return deepClone(DEFAULT_PORTFOLIO);
+      const pf = JSON.parse(raw);
+      if(!pf || !Array.isArray(pf.projects)) return deepClone(DEFAULT_PORTFOLIO);
+      // migrate missing fields
+      pf.defaultProjectTargetMarginPct = Number(pf.defaultProjectTargetMarginPct ?? DEFAULT_POLICY.defaultProjectTargetMarginPct);
+      if (pf.portfolioTargetMarginPct === undefined) pf.portfolioTargetMarginPct = null;
+      for (const prj of pf.projects){
+        if(!Array.isArray(prj.variations)) prj.variations = [];
+        if(!Array.isArray(prj.stages)) prj.stages = deepClone(DEFAULT_PORTFOLIO.projects[0].stages).map(s=>({ ...s, planned:0, forecast:0, actual:0 }));
+        prj.contract = Number(prj.contract||0);
+        prj.targetPct = Number(prj.targetPct ?? pf.defaultProjectTargetMarginPct);
+        // migrate stage numeric fields
+        for(const st of prj.stages){
+          st.planned = Number(st.planned||0); st.actual = Number(st.actual||0); st.forecast = Number(st.forecast||0);
+        }
+        // migrate variation numeric fields
+        for(const v of prj.variations){
+          v.cost = Number(v.cost||0); v.charge = Number(v.charge||0); v.approved = !!v.approved;
+        }
+      }
+      return pf;
+    }catch{ return deepClone(DEFAULT_PORTFOLIO); }
+  }
+  function savePortfolio(pf){ localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(pf)); }
+
+  function money(n){
+    const x = Number(n||0);
+    return x.toLocaleString("en-AU", { style:"currency", currency:"AUD", maximumFractionDigits:0 });
+  }
+
+  function getPid(){
+    const u = new URL(location.href);
+    return u.searchParams.get("pid");
+  }
+
+  function getProject(pf, pid){
+    return pf.projects.find(p=>p.id===pid) || null;
+  }
+
+  function calcProject(prj){
+    const policy = loadPolicy();
+
+    const baseBudget = prj.stages.reduce((a,s)=>a+Number(s.planned||0),0);
+    const forecastCostStages = prj.stages.reduce((a,s)=>a+Number(s.forecast||0),0);
+    const actualToDate = prj.stages.reduce((a,s)=>a+Number(s.actual||0),0);
+
+    let approvedCharge=0, approvedCost=0, unapprovedCharge=0, unapprovedCost=0;
+    for(const v of prj.variations||[]){
+      const c=Number(v.cost||0), ch=Number(v.charge||0);
+      if(v.approved){ approvedCharge+=ch; approvedCost+=c; }
+      else { unapprovedCharge+=ch; unapprovedCost+=c; }
     }
-  }
 
-  function savePolicy(p) {
-    localStorage.setItem(POLICY_KEY, JSON.stringify(p));
-  }
+    const revenueApproved = prj.contract + approvedCharge; // conservative realised revenue
+    const targetProfit = prj.contract * (prj.targetPct/100);
 
-  function resetPolicy() {
-    savePolicy(structuredClone(DEFAULT_POLICY));
-    location.reload();
-  }
+    const forecastFinalCost = forecastCostStages + approvedCost;
+    const currentProfit = revenueApproved - forecastFinalCost;
+    const currentMarginPct = revenueApproved>0 ? (currentProfit/revenueApproved)*100 : 0;
 
-  const policy = loadPolicy();
+    const driftPct = currentMarginPct - prj.targetPct;
+    const driftDollars = currentProfit - targetProfit;
 
-  function onSave(e) {
-    e.preventDefault();
-    const p = {
-      minVariationMarginPct: Number(document.getElementById("minVar").value || DEFAULT_POLICY.minVariationMarginPct),
-      projectDriftTolerancePct: Number(document.getElementById("projTol").value || DEFAULT_POLICY.projectDriftTolerancePct),
-      portfolioDriftTolerancePct: Number(document.getElementById("portTol").value || DEFAULT_POLICY.portfolioDriftTolerancePct),
-      exposureThreshold: Number(document.getElementById("expo").value || DEFAULT_POLICY.exposureThreshold)
+    const exposure = Math.max(0, unapprovedCost - unapprovedCharge);
+
+    let risk="GREEN";
+    if (driftPct <= -2 || driftDollars <= -25000) risk="RED";
+    else if (driftPct <= -1 || driftDollars <= -10000) risk="AMBER";
+
+    const lowMarginMin = Number(policy.minVariationMarginPct||15);
+
+    return {
+      baseBudget, forecastCostStages, actualToDate,
+      approvedCharge, approvedCost, unapprovedCharge, unapprovedCost,
+      revenueApproved, targetProfit,
+      forecastFinalCost, currentProfit, currentMarginPct,
+      driftPct, driftDollars,
+      exposure, risk, lowMarginMin
     };
-    savePolicy(p);
-    const msg = document.getElementById("saved");
-    msg.classList.remove("hidden");
-    msg.textContent = "Saved. These rules will apply across the demo on refresh.";
-    setTimeout(() => msg.classList.add("hidden"), 2500);
   }
+
+  function riskBadge(r){
+    if(r==="RED") return `<span class="inline-flex items-center rounded-full bg-red-50 px-2 py-1 text-xs font-medium text-red-700 border border-red-200">High</span>`;
+    if(r==="AMBER") return `<span class="inline-flex items-center rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 border border-amber-200">Med</span>`;
+    return `<span class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 border border-emerald-200">Low</span>`;
+  }
+
 </script>
 
 <header class="border-b bg-white">
-  <div class="mx-auto max-w-4xl px-4 py-4 flex items-center justify-between">
+  <div class="mx-auto max-w-5xl px-4 py-4 flex items-center justify-between">
     <div>
       <div class="text-xl font-semibold">Profit Protection System</div>
-      <div class="text-sm text-slate-600">Policy Settings (demo)</div>
+      <div class="text-sm text-slate-600">Policy settings (demo)</div>
     </div>
     <div class="flex gap-2">
       <a href="index.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Portfolio</a>
-      <a href="project.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Project</a>
       <a href="pitch.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Pitch Mode</a>
-      <button onclick="resetPolicy()" class="px-3 py-2 rounded-lg bg-white border text-sm">Reset Policy</button>
     </div>
   </div>
 </header>
 
-<main class="mx-auto max-w-4xl px-4 py-6">
+<main class="mx-auto max-w-5xl px-4 py-6">
   <div class="rounded-2xl bg-white border p-5">
-    <div class="text-lg font-semibold">Financial Control Rules</div>
-    <div class="text-sm text-slate-600 mt-1">These are director-level guardrails. Alerts in the demo use these thresholds.</div>
+    <div class="text-lg font-semibold">Guardrails</div>
+    <div class="text-sm text-slate-600 mt-1">Stored in your browser (localStorage). Use this to show “configurable policy”.</div>
 
-    <form class="mt-5 space-y-4" onsubmit="onSave(event)">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="rounded-xl bg-slate-50 border p-4">
-          <label class="text-sm font-medium text-slate-700">Minimum variation margin (%)</label>
-          <div class="text-xs text-slate-500 mt-1">If a variation margin is below this, show a warning.</div>
-          <input id="minVar" type="number" step="0.1" class="mt-3 w-full rounded-lg border px-3 py-2 text-sm"
-                 value="">
-        </div>
-
-        <div class="rounded-xl bg-slate-50 border p-4">
-          <label class="text-sm font-medium text-slate-700">Project drift tolerance (% points)</label>
-          <div class="text-xs text-slate-500 mt-1">If current margin is lower than target by more than this, show a red banner.</div>
-          <input id="projTol" type="number" step="0.1" class="mt-3 w-full rounded-lg border px-3 py-2 text-sm"
-                 value="">
-        </div>
-
-        <div class="rounded-xl bg-slate-50 border p-4">
-          <label class="text-sm font-medium text-slate-700">Portfolio drift tolerance (% points)</label>
-          <div class="text-xs text-slate-500 mt-1">If portfolio margin is lower than target by more than this, show a red banner.</div>
-          <input id="portTol" type="number" step="0.1" class="mt-3 w-full rounded-lg border px-3 py-2 text-sm"
-                 value="">
-        </div>
-
-        <div class="rounded-xl bg-slate-50 border p-4">
-          <label class="text-sm font-medium text-slate-700">Exposure threshold (AUD)</label>
-          <div class="text-xs text-slate-500 mt-1">Optional. Used to flag high unapproved exposure (Phase 2).</div>
-          <input id="expo" type="number" step="1" class="mt-3 w-full rounded-lg border px-3 py-2 text-sm"
-                 value="">
-        </div>
+    <div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="rounded-xl bg-slate-50 border p-4">
+        <div class="text-sm text-slate-600">Min variation margin (%)</div>
+        <input id="minVar" type="number" step="0.1" class="mt-2 w-full rounded-lg border px-3 py-2 text-sm"/>
+        <div class="text-xs text-slate-500 mt-2">Variations below this margin are highlighted.</div>
       </div>
 
-      <div id="saved" class="hidden rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-700 text-sm"></div>
-
-      <div class="flex items-center justify-between pt-2">
-        <div class="text-xs text-slate-500">
-          Demo note: these rules are stored in your browser (localStorage).
-        </div>
-        <button class="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm">Save Policy</button>
+      <div class="rounded-xl bg-slate-50 border p-4">
+        <div class="text-sm text-slate-600">Project drift tolerance (%)</div>
+        <input id="projTol" type="number" step="0.1" class="mt-2 w-full rounded-lg border px-3 py-2 text-sm"/>
+        <div class="text-xs text-slate-500 mt-2">Alert when current margin is below target by more than this.</div>
       </div>
-    </form>
+
+      <div class="rounded-xl bg-slate-50 border p-4">
+        <div class="text-sm text-slate-600">Portfolio drift tolerance (%)</div>
+        <input id="portTol" type="number" step="0.1" class="mt-2 w-full rounded-lg border px-3 py-2 text-sm"/>
+      </div>
+
+      <div class="rounded-xl bg-slate-50 border p-4">
+        <div class="text-sm text-slate-600">Exposure threshold (AUD)</div>
+        <input id="expTh" type="number" step="100" class="mt-2 w-full rounded-lg border px-3 py-2 text-sm"/>
+        <div class="text-xs text-slate-500 mt-2">Exposure is unapproved cost not covered by unapproved charge.</div>
+      </div>
+
+      <div class="rounded-xl bg-slate-50 border p-4">
+        <div class="text-sm text-slate-600">Portfolio target margin override (%)</div>
+        <input id="portTarget" type="number" step="0.1" class="mt-2 w-full rounded-lg border px-3 py-2 text-sm" placeholder="Leave blank for weighted project targets"/>
+        <div class="text-xs text-slate-500 mt-2">If set, portfolio drift uses this % instead of weighted targets.</div>
+      </div>
+
+      <div class="rounded-xl bg-slate-50 border p-4">
+        <div class="text-sm text-slate-600">Default project target margin (%)</div>
+        <input id="defaultProjTarget" type="number" step="0.1" class="mt-2 w-full rounded-lg border px-3 py-2 text-sm"/>
+        <div class="text-xs text-slate-500 mt-2">Used for “Reset Portfolio” and new projects.</div>
+      </div>
+    </div>
+
+    <div class="mt-5 flex gap-2">
+      <button id="save" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm">Save policy</button>
+      <button id="reset" class="px-4 py-2 rounded-lg bg-white border text-sm">Reset to defaults</button>
+    </div>
+
+    <div id="saved" class="text-sm text-emerald-700 mt-3 hidden">Saved.</div>
   </div>
-
-  <script>
-    // set values
-    document.getElementById("minVar").value = policy.minVariationMarginPct;
-    document.getElementById("projTol").value = policy.projectDriftTolerancePct;
-    document.getElementById("portTol").value = policy.portfolioDriftTolerancePct;
-    document.getElementById("expo").value = policy.exposureThreshold;
-  </script>
 </main>
+
+<script>
+  function fill() {
+    const p = loadPolicy();
+    document.getElementById("minVar").value = p.minVariationMarginPct;
+    document.getElementById("projTol").value = p.projectDriftTolerancePct;
+    document.getElementById("portTol").value = p.portfolioDriftTolerancePct;
+    document.getElementById("expTh").value = p.exposureThreshold;
+    document.getElementById("portTarget").value = (p.portfolioTargetMarginPct ?? "");
+    document.getElementById("defaultProjTarget").value = p.defaultProjectTargetMarginPct;
+  }
+  fill();
+
+  document.getElementById("save").onclick = () => {
+    const p = loadPolicy();
+    p.minVariationMarginPct = Number(document.getElementById("minVar").value||15);
+    p.projectDriftTolerancePct = Number(document.getElementById("projTol").value||1);
+    p.portfolioDriftTolerancePct = Number(document.getElementById("portTol").value||1);
+    p.exposureThreshold = Number(document.getElementById("expTh").value||20000);
+
+    const pt = document.getElementById("portTarget").value;
+    p.portfolioTargetMarginPct = (pt==="" ? null : Number(pt));
+
+    p.defaultProjectTargetMarginPct = Number(document.getElementById("defaultProjTarget").value||18);
+
+    savePolicy(p);
+
+    // also store in portfolio metadata so reset uses it
+    const pf = loadPortfolio();
+    pf.portfolioTargetMarginPct = p.portfolioTargetMarginPct;
+    pf.defaultProjectTargetMarginPct = p.defaultProjectTargetMarginPct;
+    for (const prj of pf.projects) {
+      if (prj.targetPct === undefined || prj.targetPct === null) prj.targetPct = p.defaultProjectTargetMarginPct;
+    }
+    savePortfolio(pf);
+
+    const s = document.getElementById("saved");
+    s.classList.remove("hidden");
+    setTimeout(()=>s.classList.add("hidden"), 1200);
+  };
+
+  document.getElementById("reset").onclick = () => {
+    localStorage.removeItem(POLICY_KEY);
+    fill();
+  };
+</script>
+
 </body>
 </html>

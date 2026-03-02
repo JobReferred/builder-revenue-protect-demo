@@ -5,171 +5,310 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Profit Protection Demo — Add Variation</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  
 </head>
 <body class="bg-slate-50 text-slate-900">
-  <script>
-    function loadState() {
-      const raw = localStorage.getItem("pp_demo_state");
-      if (!raw) return null;
-      try { return JSON.parse(raw); } catch { return null; }
-    }
-    function saveState(state) {
-      localStorage.setItem("pp_demo_state", JSON.stringify(state));
-    }
-    function money(n) {
-      const x = Number(n || 0);
-      return x.toLocaleString("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 });
+
+<script>
+
+  const PORTFOLIO_KEY = "pp_demo_portfolio";
+  const POLICY_KEY = "pp_demo_policy";
+
+  const DEFAULT_POLICY = {
+    minVariationMarginPct: 15,
+    projectDriftTolerancePct: 1.0,
+    portfolioDriftTolerancePct: 1.0,
+    exposureThreshold: 20000,
+    portfolioTargetMarginPct: null,           // optional override
+    defaultProjectTargetMarginPct: 18.0       // for new projects / reset
+  };
+
+  const DEFAULT_PORTFOLIO = {
+    ownerName: "Director View",
+    // If set, portfolio target margin uses this instead of weighted project targets
+    portfolioTargetMarginPct: null,
+    defaultProjectTargetMarginPct: 18.0,
+    projects: [
+      {
+        id:"P-024", name:"Lot 24 – Bardia",
+        contract:780000, targetPct:18.0,
+        // Stage budget (planned/actual/forecast) - editable actual/forecast
+        stages: [
+          { key:"prelim", label:"1. Preliminaries / Site", planned:120000, actual:0, forecast:120000 },
+          { key:"frame",  label:"2. Slab / Frame",          planned:180000, actual:0, forecast:180000 },
+          { key:"lockup", label:"3. Lock-up / Rough-ins",   planned:150000, actual:0, forecast:150000 },
+          { key:"fixout", label:"4. Fix-out / Fit-off",     planned:140000, actual:0, forecast:140000 },
+          { key:"pcomp",  label:"5. Practical completion",  planned:56200,  actual:0, forecast:56200  },
+        ],
+        // Variations belong to project
+        variations: [
+          { id:"V-101", desc:"Upgraded kitchen splashback", cost:1200, charge:2200, approved:true },
+          { id:"V-102", desc:"Extra downlights (living + kitchen)", cost:850, charge:1500, approved:true },
+          { id:"V-103", desc:"Driveway finish upgrade", cost:3250, charge:4500, approved:false },
+          { id:"V-104", desc:"External power point allowance", cost:-100, charge:0, approved:false },
+        ]
+      },
+      {
+        id:"P-031", name:"Lot 31 – Oran Park",
+        contract:920000, targetPct:19.0,
+        stages: [
+          { key:"prelim", label:"1. Preliminaries / Site", planned:150000, actual:0, forecast:155000 },
+          { key:"frame",  label:"2. Slab / Frame",          planned:220000, actual:0, forecast:240000 },
+          { key:"lockup", label:"3. Lock-up / Rough-ins",   planned:190000, actual:0, forecast:205000 },
+          { key:"fixout", label:"4. Fix-out / Fit-off",     planned:170000, actual:0, forecast:175000 },
+          { key:"pcomp",  label:"5. Practical completion",  planned:42000,  actual:0, forecast:44000  },
+        ],
+        variations: [
+          { id:"V-201", desc:"Bathroom upgrade package", cost:12000, charge:12000, approved:true },
+          { id:"V-202", desc:"Extra cabinetry", cost:3500, charge:4500, approved:false },
+          { id:"V-203", desc:"Rock excavation allowance", cost:6000, charge:3500, approved:false },
+        ]
+      },
+      {
+        id:"P-019", name:"Lot 19 – Edmondson Park",
+        contract:650000, targetPct:17.0,
+        stages: [
+          { key:"prelim", label:"1. Preliminaries / Site", planned:100000, actual:0, forecast:105000 },
+          { key:"frame",  label:"2. Slab / Frame",          planned:150000, actual:0, forecast:150000 },
+          { key:"lockup", label:"3. Lock-up / Rough-ins",   planned:140000, actual:0, forecast:148000 },
+          { key:"fixout", label:"4. Fix-out / Fit-off",     planned:115000, actual:0, forecast:118000 },
+          { key:"pcomp",  label:"5. Practical completion",  planned:45000,  actual:0, forecast:46500  },
+        ],
+        variations: [
+          { id:"V-301", desc:"Window upgrade", cost:4200, charge:6000, approved:true },
+          { id:"V-302", desc:"Additional landscaping", cost:14000, charge:18000, approved:false },
+        ]
+      },
+      {
+        id:"P-044", name:"Lot 44 – Austral",
+        contract:840000, targetPct:18.0,
+        stages: [
+          { key:"prelim", label:"1. Preliminaries / Site", planned:130000, actual:0, forecast:135000 },
+          { key:"frame",  label:"2. Slab / Frame",          planned:210000, actual:0, forecast:215000 },
+          { key:"lockup", label:"3. Lock-up / Rough-ins",   planned:190000, actual:0, forecast:195000 },
+          { key:"fixout", label:"4. Fix-out / Fit-off",     planned:160000, actual:0, forecast:160000 },
+          { key:"pcomp",  label:"5. Practical completion",  planned:30000,  actual:0, forecast:30000  },
+        ],
+        variations: [
+          { id:"V-401", desc:"Facade upgrade", cost:7100, charge:9500, approved:true },
+        ]
+      },
+    ]
+  };
+
+  function deepClone(obj){ return JSON.parse(JSON.stringify(obj)); }
+
+  function loadPolicy(){
+    try{
+      const raw = localStorage.getItem(POLICY_KEY);
+      if(!raw) return deepClone(DEFAULT_POLICY);
+      const p = JSON.parse(raw);
+      return { ...deepClone(DEFAULT_POLICY), ...p };
+    }catch{ return deepClone(DEFAULT_POLICY); }
+  }
+  function savePolicy(p){ localStorage.setItem(POLICY_KEY, JSON.stringify(p)); }
+
+  function loadPortfolio(){
+    try{
+      const raw = localStorage.getItem(PORTFOLIO_KEY);
+      if(!raw) return deepClone(DEFAULT_PORTFOLIO);
+      const pf = JSON.parse(raw);
+      if(!pf || !Array.isArray(pf.projects)) return deepClone(DEFAULT_PORTFOLIO);
+      // migrate missing fields
+      pf.defaultProjectTargetMarginPct = Number(pf.defaultProjectTargetMarginPct ?? DEFAULT_POLICY.defaultProjectTargetMarginPct);
+      if (pf.portfolioTargetMarginPct === undefined) pf.portfolioTargetMarginPct = null;
+      for (const prj of pf.projects){
+        if(!Array.isArray(prj.variations)) prj.variations = [];
+        if(!Array.isArray(prj.stages)) prj.stages = deepClone(DEFAULT_PORTFOLIO.projects[0].stages).map(s=>({ ...s, planned:0, forecast:0, actual:0 }));
+        prj.contract = Number(prj.contract||0);
+        prj.targetPct = Number(prj.targetPct ?? pf.defaultProjectTargetMarginPct);
+        // migrate stage numeric fields
+        for(const st of prj.stages){
+          st.planned = Number(st.planned||0); st.actual = Number(st.actual||0); st.forecast = Number(st.forecast||0);
+        }
+        // migrate variation numeric fields
+        for(const v of prj.variations){
+          v.cost = Number(v.cost||0); v.charge = Number(v.charge||0); v.approved = !!v.approved;
+        }
+      }
+      return pf;
+    }catch{ return deepClone(DEFAULT_PORTFOLIO); }
+  }
+  function savePortfolio(pf){ localStorage.setItem(PORTFOLIO_KEY, JSON.stringify(pf)); }
+
+  function money(n){
+    const x = Number(n||0);
+    return x.toLocaleString("en-AU", { style:"currency", currency:"AUD", maximumFractionDigits:0 });
+  }
+
+  function getPid(){
+    const u = new URL(location.href);
+    return u.searchParams.get("pid");
+  }
+
+  function getProject(pf, pid){
+    return pf.projects.find(p=>p.id===pid) || null;
+  }
+
+  function calcProject(prj){
+    const policy = loadPolicy();
+
+    const baseBudget = prj.stages.reduce((a,s)=>a+Number(s.planned||0),0);
+    const forecastCostStages = prj.stages.reduce((a,s)=>a+Number(s.forecast||0),0);
+    const actualToDate = prj.stages.reduce((a,s)=>a+Number(s.actual||0),0);
+
+    let approvedCharge=0, approvedCost=0, unapprovedCharge=0, unapprovedCost=0;
+    for(const v of prj.variations||[]){
+      const c=Number(v.cost||0), ch=Number(v.charge||0);
+      if(v.approved){ approvedCharge+=ch; approvedCost+=c; }
+      else { unapprovedCharge+=ch; unapprovedCost+=c; }
     }
 
+    const revenueApproved = prj.contract + approvedCharge; // conservative realised revenue
+    const targetProfit = prj.contract * (prj.targetPct/100);
 
-    // ===== Policy (demo guardrails) =====
-    const POLICY_KEY = "pp_demo_policy";
-    const DEFAULT_POLICY = {
-      minVariationMarginPct: 15,
-      projectDriftTolerancePct: 1.0,
-      portfolioDriftTolerancePct: 1.0,
-      exposureThreshold: 20000
+    const forecastFinalCost = forecastCostStages + approvedCost;
+    const currentProfit = revenueApproved - forecastFinalCost;
+    const currentMarginPct = revenueApproved>0 ? (currentProfit/revenueApproved)*100 : 0;
+
+    const driftPct = currentMarginPct - prj.targetPct;
+    const driftDollars = currentProfit - targetProfit;
+
+    const exposure = Math.max(0, unapprovedCost - unapprovedCharge);
+
+    let risk="GREEN";
+    if (driftPct <= -2 || driftDollars <= -25000) risk="RED";
+    else if (driftPct <= -1 || driftDollars <= -10000) risk="AMBER";
+
+    const lowMarginMin = Number(policy.minVariationMarginPct||15);
+
+    return {
+      baseBudget, forecastCostStages, actualToDate,
+      approvedCharge, approvedCost, unapprovedCharge, unapprovedCost,
+      revenueApproved, targetProfit,
+      forecastFinalCost, currentProfit, currentMarginPct,
+      driftPct, driftDollars,
+      exposure, risk, lowMarginMin
     };
-    function loadPolicy() {
-      try {
-        const raw = localStorage.getItem(POLICY_KEY);
-        if (!raw) return structuredClone(DEFAULT_POLICY);
-        const p = JSON.parse(raw);
-        return { ...structuredClone(DEFAULT_POLICY), ...p };
-      } catch {
-        return structuredClone(DEFAULT_POLICY);
-      }
-    }
+  }
 
+  function riskBadge(r){
+    if(r==="RED") return `<span class="inline-flex items-center rounded-full bg-red-50 px-2 py-1 text-xs font-medium text-red-700 border border-red-200">High</span>`;
+    if(r==="AMBER") return `<span class="inline-flex items-center rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 border border-amber-200">Med</span>`;
+    return `<span class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 border border-emerald-200">Low</span>`;
+  }
 
-    function ensureState() {
-      let s = loadState();
-      if (!s) {
-        // If user opened this page first, initialize minimal state
-        s = {
-          projectName: "Lot 24 – Bardia",
-          contractValue: 780000,
-          estimatedCost: 639600,
-          targetMarginPct: 18,
-          variations: []
-        };
-        saveState(s);
-      }
-      if (!Array.isArray(s.variations)) s.variations = [];
-      return s;
-    }
+</script>
 
-    const state = ensureState();
-
-    function nextId() {
-      const nums = state.variations
-        .map(v => String(v.id || "").match(/(\d+)/))
-        .filter(Boolean)
-        .map(m => Number(m[1]));
-      const max = nums.length ? Math.max(...nums) : 0;
-      const n = String(max + 1).padStart(3, "0");
-      return `V-${n}`;
-    }
-
-    function addVariation(e) {
-      e.preventDefault();
-      const id = document.getElementById("vid").value.trim() || nextId();
-      const desc = document.getElementById("desc").value.trim() || "Variation item";
-      const cost = Number(document.getElementById("cost").value || 0);
-      const charge = Number(document.getElementById("charge").value || 0);
-
-      const policy = loadPolicy();
-      const minVariationMarginPct = Number(policy.minVariationMarginPct || 15);
-      const variationMarginPct = charge > 0 ? ((charge - cost) / charge) * 100 : 0;
-
-      if (variationMarginPct < minVariationMarginPct) {
-        alert(`⚠ Variation margin is ${variationMarginPct.toFixed(1)}% (below ${minVariationMarginPct}% policy).`);
-      }
-
-      const sent = document.getElementById("sent").checked;
-      const approved = document.getElementById("approved").checked;
-      const paid = document.getElementById("paid").checked;
-
-      state.variations.push({ id, desc, cost, charge, sent, approved, paid });
-      saveState(state);
-
-      // Go to project dashboard for the “moment”
-      window.location.href = "project.html";
-    }
-  </script>
-
-  <header class="border-b bg-white">
-    <div class="mx-auto max-w-3xl px-4 py-4 flex items-center justify-between">
-      <div>
-        <div class="text-xl font-semibold">Profit Protection System</div>
-        <div class="text-sm text-slate-600">Add a variation (demo)</div>
-      </div>
-      <div class="flex gap-2">
-        <a href="index.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Portfolio</a>
-        <a href="project.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Project</a>
-        <a href="approvals.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Approvals</a>
-        <a href="summary.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Summary</a>
-        <a href="policy.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Policy</a>
-      </div>
+<header class="border-b bg-white">
+  <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+    <div>
+      <div class="text-xl font-semibold">Profit Protection System</div>
+      <div class="text-sm text-slate-600">Add Variation</div>
     </div>
-  </header>
-
-  <main class="mx-auto max-w-3xl px-4 py-6">
-    <div class="rounded-2xl bg-white border p-5">
-      <div class="text-lg font-semibold">Variation Entry</div>
-      <div class="text-sm text-slate-600 mt-1">Enter numbers and click “Update Project Margin”.</div>
-
-      <form class="mt-5 space-y-4" onsubmit="addVariation(event)">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label class="text-sm text-slate-600">Variation #</label>
-            <input id="vid" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="V-014"/>
-            <div class="text-xs text-slate-500 mt-1">Leave blank to auto-generate.</div>
-          </div>
-          <div class="md:col-span-2">
-            <label class="text-sm text-slate-600">Description</label>
-            <input id="desc" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="e.g., Upgrade stone benchtop"/>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label class="text-sm text-slate-600">Cost to builder (AUD)</label>
-            <input id="cost" type="number" step="1" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="3200" required/>
-          </div>
-          <div>
-            <label class="text-sm text-slate-600">Client charge (AUD)</label>
-            <input id="charge" type="number" step="1" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="4500" required/>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <label class="flex items-center gap-2 rounded-lg border bg-slate-50 px-3 py-2 text-sm">
-            <input id="sent" type="checkbox" class="h-4 w-4" checked/>
-            Sent to client
-          </label>
-          <label class="flex items-center gap-2 rounded-lg border bg-slate-50 px-3 py-2 text-sm">
-            <input id="approved" type="checkbox" class="h-4 w-4"/>
-            Approved
-          </label>
-          <label class="flex items-center gap-2 rounded-lg border bg-slate-50 px-3 py-2 text-sm">
-            <input id="paid" type="checkbox" class="h-4 w-4"/>
-            Paid
-          </label>
-        </div>
-
-        <div class="flex items-center justify-between pt-2">
-          <a href="project.html" class="text-sm underline">Cancel</a>
-          <button class="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm">
-            Update Project Margin
-          </button>
-        </div>
-      </form>
+    <div class="flex gap-2 flex-wrap justify-end">
+      <a href="index.html" class="px-3 py-2 rounded-lg bg-white border text-sm">Portfolio</a>
+      <a id="backToProject" href="#" class="px-3 py-2 rounded-lg bg-white border text-sm">Back to Project</a>
+      <a id="toApprovals" href="#" class="px-3 py-2 rounded-lg bg-white border text-sm">Approvals</a>
+      <a id="toSummary" href="#" class="px-3 py-2 rounded-lg bg-white border text-sm">Summary</a>
     </div>
-  </main>
+  </div>
+</header>
 
+<main class="mx-auto max-w-3xl px-4 py-6">
   <script>
-    document.getElementById("vid").placeholder = nextId();
+    const pid = getPid() || "P-024";
+    const pf = loadPortfolio();
+    const prj = getProject(pf, pid);
+    const toFile = (pid) => {
+      if (pid==="P-024") return "project.html";
+      if (pid==="P-031") return "project_p031.html";
+      if (pid==="P-019") return "project_p019.html";
+      if (pid==="P-044") return "project_p044.html";
+      return "project.html";
+    };
+    document.getElementById("backToProject").href = toFile(pid);
+    document.getElementById("toApprovals").href = `approvals.html?pid=${pid}`;
+    document.getElementById("toSummary").href = `summary.html?pid=${pid}`;
   </script>
+
+  <div class="rounded-2xl bg-white border p-5">
+    <div class="text-lg font-semibold">New Variation</div>
+    <div class="text-sm text-slate-600 mt-1">Adds to this job only. Approve it later on the Approvals page.</div>
+
+    <div class="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="text-sm text-slate-600">ID</label>
+        <input id="vid" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="V-999" />
+      </div>
+      <div>
+        <label class="text-sm text-slate-600">Approved?</label>
+        <select id="approved" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm">
+          <option value="no" selected>No (risk)</option>
+          <option value="yes">Yes (affects margin)</option>
+        </select>
+      </div>
+      <div class="md:col-span-2">
+        <label class="text-sm text-slate-600">Description</label>
+        <input id="desc" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" placeholder="Describe the variation..." />
+      </div>
+      <div>
+        <label class="text-sm text-slate-600">Builder cost (AUD)</label>
+        <input id="cost" type="number" step="10" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" />
+      </div>
+      <div>
+        <label class="text-sm text-slate-600">Client charge (AUD)</label>
+        <input id="charge" type="number" step="10" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm" />
+      </div>
+    </div>
+
+    <div class="mt-5 flex gap-2">
+      <button id="add" class="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm">Add variation</button>
+      <a id="goApprovals" href="#" class="px-4 py-2 rounded-lg bg-white border text-sm">Go to approvals</a>
+    </div>
+
+    <div id="msg" class="text-sm mt-3 hidden"></div>
+  </div>
+</main>
+
+<script>
+  const pid = getPid() || "P-024";
+  const toFile = (pid) => {
+    if (pid==="P-024") return "project.html";
+    if (pid==="P-031") return "project_p031.html";
+    if (pid==="P-019") return "project_p019.html";
+    if (pid==="P-044") return "project_p044.html";
+    return "project.html";
+  };
+  document.getElementById("goApprovals").href = `approvals.html?pid=${pid}`;
+
+  document.getElementById("add").onclick = () => {
+    const pf = loadPortfolio();
+    const prj = getProject(pf, pid);
+    const v = {
+      id: (document.getElementById("vid").value || "").trim() || `V-${Math.floor(Math.random()*900+100)}`,
+      desc: (document.getElementById("desc").value || "").trim() || "Variation",
+      cost: Number(document.getElementById("cost").value || 0),
+      charge: Number(document.getElementById("charge").value || 0),
+      approved: document.getElementById("approved").value === "yes",
+    };
+    prj.variations = prj.variations || [];
+    prj.variations.push(v);
+    savePortfolio(pf);
+
+    const msg = document.getElementById("msg");
+    msg.classList.remove("hidden");
+    msg.className = "text-sm mt-3 text-emerald-700";
+    msg.textContent = "Added. (Check Project or Approvals.)";
+
+    // clear minimal fields
+    document.getElementById("vid").value = "";
+    document.getElementById("desc").value = "";
+    document.getElementById("cost").value = "";
+    document.getElementById("charge").value = "";
+    document.getElementById("approved").value = "no";
+  };
+</script>
+
 </body>
 </html>
